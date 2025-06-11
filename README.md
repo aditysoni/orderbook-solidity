@@ -207,14 +207,8 @@ The `Orderbook` contract implements a basic on-chain order book for trading, sup
    (uint256 bestBid, uint256 bestAsk) = getBestBidAsk();
    ```
 
----
+----
 
-## Notes
-
-- Orders are matched automatically upon creation if possible.
-- The contract uses linked lists for efficient order and price level management.
-- All state-changing actions emit relevant events for off-chain tracking.
-- The contract does not handle asset transfers; it only manages order and trade logic.
 
 # OrderbookFactory Smart Contract Documentation
 
