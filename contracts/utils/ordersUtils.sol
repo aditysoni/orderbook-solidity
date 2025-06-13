@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-
 library OrderUtils {
     // Enums
     enum OrderType { LIMIT, MARKET }
@@ -15,8 +14,9 @@ library OrderUtils {
         OrderType orderType;
         OrderSide side;
         uint256 price;      // Price in wei (0 for market orders)
-        uint256 quantity;   // Quantity to buy/sell
-        uint256 filled;     // Amount already filled
+        uint256 quantityInTokens;   // Quantity to buy/sell in index tokens
+        uint256 quantityInUsdt;     // USDT collateral for buy orders
+        uint256 filled;     // Amount filled in tokens
         OrderStatus status;
         uint256 timestamp;
         uint256 nextOrder;  // Next order in the same price level
@@ -27,7 +27,7 @@ library OrderUtils {
         uint256 price;
         uint256 firstOrder;    // First order at this price level
         uint256 lastOrder;     // Last order at this price level
-        uint256 totalVolume;   // Total volume at this price level
+        uint256 totalVolume;   // Total volume at this price level (in tokens)
         uint256 nextPrice;     // Next price level (higher for buy, lower for sell)
         uint256 prevPrice;     // Previous price level
         bool exists;           // Whether this price level exists
@@ -53,11 +53,10 @@ library OrderUtils {
     function validateOrderCreation(
         OrderType _orderType,
         uint256 _price,
-        uint256 _quantity
+        uint256 _quantityInTokens
     ) internal pure {
-        require(_quantity > 0, "Quantity must be greater than 0");
-        
         if (_orderType == OrderType.LIMIT) {
+            require(_quantityInTokens > 0, "Quantity in tokens must be greater than 0");
             require(_price > 0, "Limit order must have price > 0");
         }
     }
@@ -66,12 +65,11 @@ library OrderUtils {
         return order.status == OrderStatus.ACTIVE;
     }
     
-    function getRemainingQuantity(Order storage order) internal view returns (uint256) {
-        return order.quantity - order.filled;
-    }
-    
     function isOrderFullyFilled(Order storage order) internal view returns (bool) {
-        return order.filled == order.quantity;
+        if (order.orderType == OrderType.MARKET && order.side == OrderSide.BUY) {
+            return order.quantityInUsdt == 0 || (order.filled > 0 && order.status != OrderStatus.ACTIVE);
+        }
+        return order.filled >= order.quantityInTokens && order.quantityInTokens > 0;
     }
     
     // Price level utility functions
@@ -88,13 +86,12 @@ library OrderUtils {
         }
         
         if (incomingOrder.side == OrderSide.BUY) {
-            // Buy order can match if its price >= sell order price
-            return incomingOrder.orderType == OrderType.MARKET || 
-                   incomingOrder.price >= existingOrder.price;
+            if (incomingOrder.orderType == OrderType.MARKET) {
+                return incomingOrder.quantityInUsdt >= existingOrder.price * (existingOrder.quantityInTokens - existingOrder.filled);
+            }
+            return incomingOrder.price >= existingOrder.price;
         } else {
-            // Sell order can match if its price <= buy order price
-            return incomingOrder.orderType == OrderType.MARKET || 
-                   incomingOrder.price <= existingOrder.price;
+            return incomingOrder.orderType == OrderType.MARKET || incomingOrder.price <= existingOrder.price;
         }
     }
 }
